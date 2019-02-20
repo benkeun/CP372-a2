@@ -2,8 +2,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.util.Arrays;
 import java.util.Scanner;
 import javax.swing.*;
 import java.awt.FlowLayout;
@@ -24,17 +26,50 @@ public class Receiver extends JFrame implements ActionListener {
     static JTextField dataPortField = new JTextField("");
     static JTextField fileNameField = new JTextField("");
     static JTextArea dataArea = new JTextArea("");
+    static int packetSize;
+    static int numPackets;
 
     static DatagramSocket socket = null;
     static InetAddress address;
     static DatagramPacket packet;
     static boolean connected = false;
-    static Thread receiving = new Thread(){
-        public void run(){
-            try{
+    static boolean acknowledged[];
 
-            }catch(Exception e){
-                
+    Thread receiving = new Thread() {
+        public void run() {
+            try {
+                String packetInfo[] = handshake().split(" ");
+                packetSize = Integer.parseInt(packetInfo[0]);
+                numPackets = Integer.parseInt(packetInfo[1]);
+                byte[][] file = new byte[numPackets][packetSize];
+                boolean transmitting = true;
+                while (transmitting) {
+                    byte[] buffer = new byte[packetSize];
+                    packet.setData(buffer);
+                    packet.setLength(packetSize);
+                    socket.receive(packet);
+                    byte[] sequenceNumberByte = Arrays.copyOfRange(buffer, 0, 4);
+                    byte[] filePortionByte = Arrays.copyOfRange(buffer, 4, buffer.length);
+
+                    int sequenceNumber = java.nio.ByteBuffer.wrap(sequenceNumberByte).getInt();
+                    if (sequenceNumber == -1) {
+                        transmitting = false;
+                        FileOutputStream out = new FileOutputStream("file.txt")
+                        for (int i = 0; i < numPackets; i++) {
+                            out.write(file[i]);
+                        }
+                    } else {
+                        file[sequenceNumber] = filePortionByte;
+                        acknowledged[sequenceNumber] = true;
+                        packet.setData(sequenceNumberByte);
+                        packet.setLength(4);
+                        socket.send(packet);
+                        System.out.println(new String(buffer));
+                    }
+                }
+
+            } catch (Exception e) {
+                System.out.println(e);
             }
         }
     };
@@ -44,6 +79,50 @@ public class Receiver extends JFrame implements ActionListener {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setVisible(true);
         connectPanelInit();
+    }
+
+    public String handshake() {
+        try {
+            byte[] buffer = new byte[64]; // 2^8
+            packet.setData(buffer);
+            socket.receive(packet);
+            String handshake = new String(buffer);
+            return handshake;
+        } catch (Exception e) {
+            System.out.println(e);
+        }
+        return "";
+    }
+
+    public void actionPerformed(ActionEvent ae) {
+        String action = ae.getActionCommand();
+        try {
+            if (action.equals("CONNECT")) {
+                connectionInit();
+                clientPanelInit();
+                receiving.start();
+            } else if (action.equals("DISCONNECT")) {
+                socket.close();
+                clientPanel.setVisible(false);
+                connected = false;
+                connectPanelInit();
+                receiving.stop();
+            }
+        } catch (Exception e) {
+            System.out.println("eror");
+            dataArea.setText("Input error");
+        }
+    }
+
+    public void connectionInit() {
+        try {
+            socket = new DatagramSocket(Integer.parseInt(this.dataPortField.getText()));
+            address = InetAddress.getByName(IPField.getText());
+            socket.connect(address, Integer.parseInt(this.dataPortField.getText()));
+            connectPanel.setVisible(false);
+        } catch (Exception e) {
+            System.out.println(e);
+        }
     }
 
     public void connectPanelInit() {
@@ -105,37 +184,6 @@ public class Receiver extends JFrame implements ActionListener {
 
         disconnectButton.addActionListener(this);
     }
-
-    public void receive(Datagrampacket p) throws IOException{
-        byte[] data = p.getData();
-        String message = "";
-        for(int i = 0; i < p.getLength(); i++){
-           
-        }
-    }
-    public void actionPerformed(ActionEvent ae) {
-        String action = ae.getActionCommand();
-        try {
-            if (action.equals("CONNECT")) {
-                socket = new DatagramSocket(Integer.parseInt(this.dataPortField.getText()));
-                address =  InetAddress.getByName(ackPortField.getText());
-                socket.connect(address, Integer.parseInt(this.dataPortField.getText()));
-                connectPanel.setVisible(false);
-                connected = true;
-                clientPanelInit();
-                receiving.start();
-            } else if (action.equals("DISCONNECT")) {
-                socket.close();
-                clientPanel.setVisible(false);
-                connected = false;
-                connectPanelInit();
-            }
-        } catch (Exception e) {
-            System.out.println("eror");
-            dataArea.setText("Input error");
-        }
-    }
-
 
     public static void main(final String[] args) throws Exception {
         Receiver mainView = new Receiver();
