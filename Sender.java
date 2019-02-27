@@ -1,5 +1,6 @@
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileReader;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.BufferedReader;
@@ -46,6 +47,9 @@ public class Sender extends JFrame implements ActionListener {
     static DatagramSocket sock;
     static FileInputStream fileIn;
     static int timeout;
+    static long totalTime = 0;
+    static Thread out;
+    static boolean fileTransfering = false;
 
     public Sender() {
         this.setLocation(200, 200);
@@ -135,8 +139,6 @@ public class Sender extends JFrame implements ActionListener {
         timeoutField.setVisible(true);
         timeoutField.setBounds(280, 80, 110, 20);
 
-
-
         disconnectButton.setBounds(280, 120, 170, 30);
         disconnectButton.setVisible(true);
 
@@ -144,61 +146,67 @@ public class Sender extends JFrame implements ActionListener {
         transferButton.addActionListener(this);
     }
 
-    static Thread out = new Thread() {
-        public void run() {
-            try {
-                byte[] handshake = (Integer.toString(mds + 4)+" " + Integer.toString(num_seq)+" "+Integer.toString((int)((num_seq*(mds+4))-num_byte))+" ").getBytes();
-                DatagramPacket hand = new DatagramPacket(handshake, handshake.length);
-                sock.send(hand);
-                boolean fileTransfering = true;
-                int i = 0;
-                while (fileTransfering) {
-                    fileTransfering=false;
-                    try{
-                   
+    public void outThread() {
+        out = new Thread() {
+            public void run() {
+                try {
+                    byte[] handshake = (Integer.toString(mds + 4) + " " + Integer.toString(num_seq) + " "
+                            + Integer.toString((int) (((num_seq+1) * (mds + 4)) - num_byte)) + " ").getBytes();
+                    DatagramPacket hand = new DatagramPacket(handshake, handshake.length);
+                    sock.send(hand);
+                    byte[] bufr = new byte[4]; // 2^8
+                    DatagramPacket p = new DatagramPacket(bufr, 4);
+                    sock.receive(p);
+                    fileTransfering=true;
+                    int i = 0;
+                    while (fileTransfering) {
+                        fileTransfering = false;
+                        try {
 
-                    byte[] send = new byte[4 + mds];
-                    byte[] result = new byte[] { (byte) (i >> 24), (byte) (i >> 16), (byte) (i >> 8), (byte) i };
-                   
-                    System.arraycopy(result, 0, send, 0, 4);
-                    System.arraycopy(packages[i], 0, send, 4, packages[i].length);
-                    
-                    DatagramPacket n = new DatagramPacket(send, send.length);
-                    sock.send(n);
-                    
+                            byte[] send = new byte[4 + mds];
+                            byte[] result = new byte[] { (byte) (i >> 24), (byte) (i >> 16), (byte) (i >> 8),
+                                    (byte) i };
 
-                    byte[] buf = new byte[mds];
-                    DatagramPacket ack = new DatagramPacket(buf, 4);
-                    sock.receive(ack);
-                    int seq = java.nio.ByteBuffer.wrap(buf).getInt();
-                    if (i==seq){
-                    acknowledged[seq] = 1;
-                    i++;
-                    }
-                    }
-                    catch(SocketTimeoutException h){
-                        System.out.println(h);
-                    }
-                    for (int j=0;j<acknowledged.length;j++){
-                        if (acknowledged[j] == 0){
-                            fileTransfering=true;
+                            System.arraycopy(result, 0, send, 0, 4);
+                            System.arraycopy(packages[i], 0, send, 4, packages[i].length);
+
+                            DatagramPacket n = new DatagramPacket(send, send.length);
+                            sock.send(n);
+
+                            byte[] buf = new byte[mds];
+                            DatagramPacket ack = new DatagramPacket(buf, 4);
+                            sock.receive(ack);
+                            int seq = java.nio.ByteBuffer.wrap(buf).getInt();
+                            if (i == seq) {
+                                acknowledged[seq] = 1;
+                                i++;
+                            }
+                        } catch (SocketTimeoutException h) {
+                            System.out.println(h);
                         }
+                        for (int j = 0; j < acknowledged.length; j++) {
+                            if (acknowledged[j] == 0) {
+                                fileTransfering = true;
+                            }
+                        }
+
                     }
-                    
+                    byte b[] = new byte[4];
 
+                    ByteBuffer buf = ByteBuffer.wrap(b);
+                    buf.putInt(-1);
+                    DatagramPacket done = new DatagramPacket(b, 4);
+                    sock.send(done);
+                    totalTime = System.currentTimeMillis() - totalTime;
+                    dataArea.setText(String.format("It took %d ms to transfer the file.", totalTime));
+
+                } catch (Exception e) {
+                    dataArea.setText(e.getMessage());
                 }
-                byte b[] = new byte[4];
-  
-            ByteBuffer buf = ByteBuffer.wrap(b);
-            buf.putInt(-1);
-            DatagramPacket done = new DatagramPacket(b, 4);
-            sock.send(done);
-
-            } catch (Exception e) {
-                System.out.println(e );
+                return;
             }
-        }
-    };
+        };
+    }
 
     public static void main(String[] args) {
         new Sender();
@@ -220,23 +228,27 @@ public class Sender extends JFrame implements ActionListener {
                 clientPanelInit();
 
             } else if (action.equals("TRANSFER")) {
+                totalTime = System.currentTimeMillis();
                 file_name = new File(fileNameField.getText());
                 fileIn = new FileInputStream(file_name);
+
                 num_byte = file_name.length();
                 mds = Integer.parseInt(mdsField.getText());
                 num_seq = (int) Math.ceil(num_byte / mds);
                 timeout = Integer.parseInt(timeoutField.getText());
                 sock.setSoTimeout(timeout);
+                
                 packages = new byte[num_seq][mds];
                 acknowledged = new int[num_seq];
                 for (int i = 0; i < num_seq; i++) {
                     acknowledged[i] = 0;
                     fileIn.read(packages[i]);
                 }
+                outThread();
                 out.start();
             }
         } catch (Exception ae) {
-            System.out.println(ae);
+            dataArea.setText(ae.getMessage());
         }
     }
 }

@@ -1,10 +1,12 @@
 import java.io.BufferedReader;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Scanner;
 import javax.swing.*;
@@ -21,62 +23,90 @@ public class Receiver extends JFrame implements ActionListener {
     static JLabel ackPortLabel = new JLabel("ACK Port Number");
     static JLabel dataPortLabel = new JLabel("Data Port Number");
     static JLabel fileNameLabel = new JLabel("File Name");
-    static JTextField IPField = new JTextField("");
-    static JTextField ackPortField = new JTextField("");
-    static JTextField dataPortField = new JTextField("");
+    static JTextField IPField = new JTextField("127.0.0.1");
+    static JTextField ackPortField = new JTextField("400");
+    static JTextField dataPortField = new JTextField("401");
     static JTextField fileNameField = new JTextField("");
     static JTextArea dataArea = new JTextArea("");
+    static JCheckBox reliableBox = new JCheckBox("RELIABLE");
+    static boolean reliable = false;
     static int packetSize;
     static int numPackets;
+    static int leftOverByte;
+    static boolean receivingStop = false;
+    static JScrollPane scrollPane = new JScrollPane(dataArea);
 
     static DatagramSocket socket = null;
     static InetAddress address;
-    static DatagramPacket packet;
+
     static boolean connected = false;
     static boolean acknowledged[];
+    static Thread receiving;
+    static boolean transmitting=true;
 
-    Thread receiving = new Thread() {
-        public void run() {
-            try {
-                int counter = 1;
-                String packetInfo[] = handshake().split(" ");
-                packetSize = Integer.parseInt(packetInfo[0]);
-                numPackets = Integer.parseInt(packetInfo[1]);
-                byte[][] file = new byte[numPackets][packetSize];
-                boolean transmitting = true;
-                while (transmitting) {
-                    if (i % 10 != 10) {
-                        byte[] buffer = new byte[packetSize];
-                        packet.setData(buffer);
-                        packet.setLength(packetSize);
+    public void receivingThread() {
+        receiving = new Thread() {
+            public void run() {
+                try {
+                    if (connected){
+                    int counter = 1;
+                    transmitting = true;
+                    String packetInfo[] = handshake().split(" ");
+                    packetSize = Integer.parseInt(packetInfo[0]);
+                    numPackets = Integer.parseInt(packetInfo[1]);
+                    leftOverByte = Integer.parseInt(packetInfo[2]);
+                    byte[][] file = new byte[numPackets][packetSize];
+                    acknowledged = new boolean[numPackets];
+                    dataArea.setText("");
+                    byte[] buffer = new byte[packetSize];
+                    DatagramPacket packet = new DatagramPacket(buffer, packetSize);
+                    while (transmitting) {
+                        counter++;
                         socket.receive(packet);
                         byte[] sequenceNumberByte = Arrays.copyOfRange(buffer, 0, 4);
-                        byte[] filePortionByte = Arrays.copyOfRange(buffer, 4, buffer.length);
-
+                        byte[] filePortionByte;
                         int sequenceNumber = java.nio.ByteBuffer.wrap(sequenceNumberByte).getInt();
-                    }
-                    i++;
-                    if (sequenceNumber == -1) {
-                        transmitting = false;
-                        FileOutputStream out = new FileOutputStream("file.txt");
-                        for (int i = 0; i < numPackets; i++) {
-                            out.write(file[i]);
+                        if (sequenceNumber == (numPackets-1)) {
+                            filePortionByte = Arrays.copyOfRange(buffer, 4, leftOverByte);
+                        } else {
+                            filePortionByte = Arrays.copyOfRange(buffer, 4, buffer.length);
                         }
-                    } else {
-                        file[sequenceNumber] = filePortionByte;
-                        acknowledged[sequenceNumber] = true;
-                        packet.setData(sequenceNumberByte);
-                        packet.setLength(4);
-                        socket.send(packet);
-                        System.out.println(new String(buffer));
+                        if (sequenceNumber == -1) {
+                            transmitting = false;
+                            FileOutputStream out = new FileOutputStream("file.txt");
+                            for (int i = 0; i < numPackets; i++) {
+                                out.write(file[i]);
+                               
+                            }
+                            dataArea.setText(dataArea.getText()+"File Received\n");
+                        } else if (counter%10!=0 || reliable){
+                            dataArea.setText(dataArea.getText()+"There were " +(sequenceNumber+1)+" of "+numPackets+" packets Received in order\n");
+                            file[sequenceNumber] = filePortionByte;
+                            acknowledged[sequenceNumber] = true;
+                            
+                            if (sequenceNumber == numPackets) {
+                            }
+                            DatagramPacket pSend = new DatagramPacket(sequenceNumberByte, 4);
+                            socket.send(pSend);
+
+                        }
                     }
                 }
-
-            } catch (Exception e) {
-                System.out.println(e);
+                } catch (Exception e) {
+                    System.out.println(e);
+                }
+                if(receivingStop){
+                    return;
+                }
+                if(!transmitting){
+                receivingThread();
+                receiving.start();
+                }
             }
-        }
-    };
+           
+        };
+      
+    }
 
     public Receiver() {
         this.setLocation(200, 200);
@@ -87,13 +117,22 @@ public class Receiver extends JFrame implements ActionListener {
 
     public String handshake() {
         try {
-            byte[] buffer = new byte[64]; // 2^8
-            packet.setData(buffer);
-            socket.receive(packet);
-            String handshake = new String(buffer);
-            return handshake;
+            
+            byte[] buf = new byte[64]; // 2^8
+            DatagramPacket p = new DatagramPacket(buf, 64);
+            socket.receive(p);
+            String handshake = new String(buf);
+
+            buf = new byte[4];
+            ByteBuffer buffer = ByteBuffer.wrap(buf);
+            buffer.putInt(-1);
+            DatagramPacket done = new DatagramPacket(buf, 4);
+            socket.send(done);
+
+                return handshake;
+        
+           
         } catch (Exception e) {
-            System.out.println(e);
         }
         return "";
     }
@@ -104,28 +143,37 @@ public class Receiver extends JFrame implements ActionListener {
             if (action.equals("CONNECT")) {
                 connectionInit();
                 clientPanelInit();
+                receivingStop=false;
+                receivingThread();
                 receiving.start();
             } else if (action.equals("DISCONNECT")) {
                 socket.close();
                 clientPanel.setVisible(false);
                 connected = false;
+                transmitting=false;
                 connectPanelInit();
-                receiving.stop();
+                receivingStop = true;
+            }
+            else if (action.equals("RELIABLE")){
+                reliable=reliableBox.isSelected();
             }
         } catch (Exception e) {
-            System.out.println("eror");
+
             dataArea.setText("Input error");
         }
     }
 
     public void connectionInit() {
         try {
-            socket = new DatagramSocket(Integer.parseInt(this.dataPortField.getText()));
+            if (!connected){
+            connected = true;
+            socket = new DatagramSocket(Integer.parseInt(ackPortField.getText()));
             address = InetAddress.getByName(IPField.getText());
-            socket.connect(address, Integer.parseInt(this.dataPortField.getText()));
+            socket.connect(address, Integer.parseInt(dataPortField.getText()));
             connectPanel.setVisible(false);
+            }
         } catch (Exception e) {
-            System.out.println(e);
+
         }
     }
 
@@ -176,18 +224,28 @@ public class Receiver extends JFrame implements ActionListener {
 
         clientPanel.setLayout(null);
         clientPanel.add(disconnectButton);
-        clientPanel.add(dataArea);
+        clientPanel.add(reliableBox);
+        clientPanel.add(scrollPane);
         clientPanel.setVisible(true);
 
-        dataArea.setBounds(10, 200, 350, 150);
+        
         dataArea.setVisible(true);
         dataArea.setEditable(false);
         dataArea.setLineWrap(true);
+        dataArea.setText("");
+
+        reliableBox.setVisible(true);
+        reliableBox.setBounds(380,250,100,30);
 
         disconnectButton.setBounds(380, 320, 170, 30);
         disconnectButton.setVisible(true);
 
+        scrollPane.setBounds(10, 200, 350, 150);
+        scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
+        scrollPane.setVisible(true);
+
         disconnectButton.addActionListener(this);
+        reliableBox.addActionListener(this);
     }
 
     public static void main(final String[] args) throws Exception {
