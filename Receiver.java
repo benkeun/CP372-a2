@@ -1,5 +1,4 @@
 import java.io.BufferedReader;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
@@ -22,45 +21,41 @@ public class Receiver extends JFrame implements ActionListener {
     static JLabel ackPortLabel = new JLabel("ACK Port Number");
     static JLabel dataPortLabel = new JLabel("Data Port Number");
     static JLabel fileNameLabel = new JLabel("File Name");
-    static JTextField IPField = new JTextField("127.0.0.1");
-    static JTextField ackPortField = new JTextField("400");
-    static JTextField dataPortField = new JTextField("401");
+    static JTextField IPField = new JTextField("");
+    static JTextField ackPortField = new JTextField("");
+    static JTextField dataPortField = new JTextField("");
     static JTextField fileNameField = new JTextField("");
     static JTextArea dataArea = new JTextArea("");
     static int packetSize;
     static int numPackets;
-    static int leftOverByte;
 
     static DatagramSocket socket = null;
     static InetAddress address;
-    
+    static DatagramPacket packet;
     static boolean connected = false;
     static boolean acknowledged[];
 
     Thread receiving = new Thread() {
         public void run() {
             try {
-               
+                int counter = 1;
                 String packetInfo[] = handshake().split(" ");
                 packetSize = Integer.parseInt(packetInfo[0]);
                 numPackets = Integer.parseInt(packetInfo[1]);
-                leftOverByte = Integer.parseInt(packetInfo[2]);
                 byte[][] file = new byte[numPackets][packetSize];
-                acknowledged = new boolean[numPackets];
                 boolean transmitting = true;
-                byte[] buffer = new byte[packetSize];
-                DatagramPacket packet = new DatagramPacket(buffer,packetSize);
                 while (transmitting) {
-                    
-                    socket.receive(packet);
-                    byte[] sequenceNumberByte = Arrays.copyOfRange(buffer, 0, 4);
-                    byte[] filePortionByte;
-                    int sequenceNumber = java.nio.ByteBuffer.wrap(sequenceNumberByte).getInt();
-                    if(sequenceNumber==(numPackets-1)){
-                    filePortionByte = Arrays.copyOfRange(buffer, 4, leftOverByte);
-                    }else{
-                    filePortionByte = Arrays.copyOfRange(buffer, 4, buffer.length);
+                    if (i % 10 != 10) {
+                        byte[] buffer = new byte[packetSize];
+                        packet.setData(buffer);
+                        packet.setLength(packetSize);
+                        socket.receive(packet);
+                        byte[] sequenceNumberByte = Arrays.copyOfRange(buffer, 0, 4);
+                        byte[] filePortionByte = Arrays.copyOfRange(buffer, 4, buffer.length);
+
+                        int sequenceNumber = java.nio.ByteBuffer.wrap(sequenceNumberByte).getInt();
                     }
+                    i++;
                     if (sequenceNumber == -1) {
                         transmitting = false;
                         FileOutputStream out = new FileOutputStream("file.txt");
@@ -69,18 +64,16 @@ public class Receiver extends JFrame implements ActionListener {
                         }
                     } else {
                         file[sequenceNumber] = filePortionByte;
-                        
                         acknowledged[sequenceNumber] = true;
-                        
-                        if(sequenceNumber==numPackets){}
-                        DatagramPacket pSend = new DatagramPacket(sequenceNumberByte,4);
-                        socket.send(pSend);
-                        
+                        packet.setData(sequenceNumberByte);
+                        packet.setLength(4);
+                        socket.send(packet);
+                        System.out.println(new String(buffer));
                     }
                 }
 
             } catch (Exception e) {
-                System.out.println("this"+ e + "this");
+                System.out.println(e);
             }
         }
     };
@@ -94,13 +87,10 @@ public class Receiver extends JFrame implements ActionListener {
 
     public String handshake() {
         try {
-           
-            byte[] buf = new byte[64]; // 2^8
-            DatagramPacket p = new DatagramPacket(buf, 64);
-            p.setData(buf);
-            socket.receive(p);
-            
-            String handshake = new String(buf);
+            byte[] buffer = new byte[64]; // 2^8
+            packet.setData(buffer);
+            socket.receive(packet);
+            String handshake = new String(buffer);
             return handshake;
         } catch (Exception e) {
             System.out.println(e);
@@ -120,7 +110,7 @@ public class Receiver extends JFrame implements ActionListener {
                 clientPanel.setVisible(false);
                 connected = false;
                 connectPanelInit();
-                //receiving.stop();
+                receiving.stop();
             }
         } catch (Exception e) {
             System.out.println("eror");
@@ -130,9 +120,9 @@ public class Receiver extends JFrame implements ActionListener {
 
     public void connectionInit() {
         try {
-            socket = new DatagramSocket(Integer.parseInt(ackPortField.getText()));
+            socket = new DatagramSocket(Integer.parseInt(this.dataPortField.getText()));
             address = InetAddress.getByName(IPField.getText());
-            socket.connect(address, Integer.parseInt(dataPortField.getText()));
+            socket.connect(address, Integer.parseInt(this.dataPortField.getText()));
             connectPanel.setVisible(false);
         } catch (Exception e) {
             System.out.println(e);
@@ -186,6 +176,7 @@ public class Receiver extends JFrame implements ActionListener {
 
         clientPanel.setLayout(null);
         clientPanel.add(disconnectButton);
+        clientPanel.add(dataArea);
         clientPanel.setVisible(true);
 
         dataArea.setBounds(10, 200, 350, 150);
