@@ -158,7 +158,6 @@ public class Receiver extends JFrame implements ActionListener {
                 reliable=reliableBox.isSelected();
             }
         } catch (Exception e) {
-
             dataArea.setText("Input error");
         }
     }
@@ -219,7 +218,7 @@ public class Receiver extends JFrame implements ActionListener {
     public void clientPanelInit() throws Exception {
         add(clientPanel);
         clientPanel.setLayout(null);
-        this.setSize(575, 400);
+        this.setSize(575, 220);
         this.setTitle("Client");
 
         clientPanel.setLayout(null);
@@ -227,7 +226,6 @@ public class Receiver extends JFrame implements ActionListener {
         clientPanel.add(reliableBox);
         clientPanel.add(scrollPane);
         clientPanel.setVisible(true);
-
         
         dataArea.setVisible(true);
         dataArea.setEditable(false);
@@ -235,12 +233,12 @@ public class Receiver extends JFrame implements ActionListener {
         dataArea.setText("");
 
         reliableBox.setVisible(true);
-        reliableBox.setBounds(380,250,100,30);
+        reliableBox.setBounds(380,60,100,30);
 
-        disconnectButton.setBounds(380, 320, 170, 30);
+        disconnectButton.setBounds(380, 130, 170, 30);
         disconnectButton.setVisible(true);
 
-        scrollPane.setBounds(10, 200, 350, 150);
+        scrollPane.setBounds(10, 10, 350, 150);
         scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
         scrollPane.setVisible(true);
 

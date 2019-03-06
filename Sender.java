@@ -26,15 +26,15 @@ public class Sender extends JFrame implements ActionListener {
     static JLabel ackPortLabel = new JLabel("ACK Port Number");
     static JLabel dataPortLabel = new JLabel("Data Port Number");
     static JLabel fileNameLabel = new JLabel("File Name");
+    static JLabel mdsLabel = new JLabel("Max Datagram Size");
+    static JLabel timeoutLabel = new JLabel("Timeout (ms)");
     static JTextField IPField = new JTextField("127.0.0.1");
     static JTextField ackPortField = new JTextField("400");
     static JTextField dataPortField = new JTextField("401");
     static JTextField fileNameField = new JTextField("Sender.java");
-    static JTextArea dataArea = new JTextArea("");
     static JTextField mdsField = new JTextField("1024");
-    static JLabel mdsLabel = new JLabel("Max Datagram Size");
     static JTextField timeoutField = new JTextField("500");
-    static JLabel timeoutLabel = new JLabel("Timeout (ms)");
+    static JTextArea dataArea = new JTextArea("");
     static File file_name;
     static double num_byte;
     static int mds;
@@ -113,6 +113,7 @@ public class Sender extends JFrame implements ActionListener {
         clientPanel.add(mdsLabel);
         clientPanel.add(timeoutField);
         clientPanel.add(timeoutLabel);
+        clientPanel.add(fileNameLabel);
 
         clientPanel.setVisible(true);
 
@@ -121,11 +122,14 @@ public class Sender extends JFrame implements ActionListener {
         dataArea.setEditable(false);
         dataArea.setLineWrap(true);
 
-        fileNameField.setVisible(true);
-        fileNameField.setBounds(10, 10, 80, 30);
-
         transferButton.setVisible(true);
-        transferButton.setBounds(100, 10, 160, 30);
+        transferButton.setBounds(280, 180, 170, 30);
+
+        fileNameLabel.setVisible(true);
+        fileNameLabel.setBounds(10, 10, 110, 20);
+
+        fileNameField.setVisible(true);
+        fileNameField.setBounds(10, 30, 110, 20);
 
         mdsLabel.setVisible(true);
         mdsLabel.setBounds(280, 10, 110, 20);
@@ -139,8 +143,8 @@ public class Sender extends JFrame implements ActionListener {
         timeoutField.setVisible(true);
         timeoutField.setBounds(280, 80, 110, 20);
 
-        disconnectButton.setBounds(280, 120, 170, 30);
         disconnectButton.setVisible(true);
+        disconnectButton.setBounds(280, 220, 170, 30);
 
         disconnectButton.addActionListener(this);
         transferButton.addActionListener(this);
@@ -151,13 +155,13 @@ public class Sender extends JFrame implements ActionListener {
             public void run() {
                 try {
                     byte[] handshake = (Integer.toString(mds + 4) + " " + Integer.toString(num_seq) + " "
-                            + Integer.toString((int) (((num_seq+1) * (mds + 4)) - num_byte)) + " ").getBytes();
+                            + Integer.toString((int) (((num_seq + 1) * (mds + 4)) - num_byte)) + " ").getBytes();
                     DatagramPacket hand = new DatagramPacket(handshake, handshake.length);
                     sock.send(hand);
                     byte[] bufr = new byte[4]; // 2^8
                     DatagramPacket p = new DatagramPacket(bufr, 4);
                     sock.receive(p);
-                    fileTransfering=true;
+                    fileTransfering = true;
                     int i = 0;
                     while (fileTransfering) {
                         fileTransfering = false;
@@ -237,7 +241,7 @@ public class Sender extends JFrame implements ActionListener {
                 num_seq = (int) Math.ceil(num_byte / mds);
                 timeout = Integer.parseInt(timeoutField.getText());
                 sock.setSoTimeout(timeout);
-                
+
                 packages = new byte[num_seq][mds];
                 acknowledged = new int[num_seq];
                 for (int i = 0; i < num_seq; i++) {
@@ -246,6 +250,10 @@ public class Sender extends JFrame implements ActionListener {
                 }
                 outThread();
                 out.start();
+            } else if (action.equals("DISCONNECT")) {
+                sock.close();
+                clientPanel.setVisible(false);
+                connectPanelInit();
             }
         } catch (Exception ae) {
             dataArea.setText(ae.getMessage());
