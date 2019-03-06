@@ -50,6 +50,7 @@ public class Sender extends JFrame implements ActionListener {
     static long totalTime = 0;
     static Thread out;
     static boolean fileTransfering = false;
+    static boolean connected=false;
 
     public Sender() {
         this.setLocation(200, 200);
@@ -154,10 +155,12 @@ public class Sender extends JFrame implements ActionListener {
         out = new Thread() {
             public void run() {
                 try {
+                    if (connected){
                     byte[] handshake = (Integer.toString(mds + 4) + " " + Integer.toString(num_seq) + " "
-                            + Integer.toString((int) (((num_seq + 1) * (mds + 4)) - num_byte)) + " ").getBytes();
+                            + Integer.toString((int) (((num_seq) * (mds + 4)) - num_byte)) + " ").getBytes();
                     DatagramPacket hand = new DatagramPacket(handshake, handshake.length);
                     sock.send(hand);
+                    System.out.println(new String(handshake));
                     byte[] bufr = new byte[4]; // 2^8
                     DatagramPacket p = new DatagramPacket(bufr, 4);
                     sock.receive(p);
@@ -204,9 +207,11 @@ public class Sender extends JFrame implements ActionListener {
                     totalTime = System.currentTimeMillis() - totalTime;
                     dataArea.setText(String.format("It took %d ms to transfer the file.", totalTime));
 
+                }
                 } catch (Exception e) {
                     dataArea.setText(e.getMessage());
                 }
+                
                 return;
             }
         };
@@ -222,16 +227,19 @@ public class Sender extends JFrame implements ActionListener {
         try {
             String action = e.getActionCommand();
             if (action.equals("CONNECT")) {
+                if (!connected){
                 portIn = Integer.parseInt(dataPortField.getText());
                 endPort = Integer.parseInt(ackPortField.getText());
                 endIP = InetAddress.getByName(IPField.getText());
-
+                connected=true;
                 sock = new DatagramSocket(portIn);
                 sock.connect(endIP, endPort);
                 connectPanel.setVisible(false);
                 clientPanelInit();
+                }
 
             } else if (action.equals("TRANSFER")) {
+                if (!fileTransfering){
                 totalTime = System.currentTimeMillis();
                 file_name = new File(fileNameField.getText());
                 fileIn = new FileInputStream(file_name);
@@ -250,10 +258,12 @@ public class Sender extends JFrame implements ActionListener {
                 }
                 outThread();
                 out.start();
+            }
             } else if (action.equals("DISCONNECT")) {
                 sock.close();
                 clientPanel.setVisible(false);
                 connectPanelInit();
+                connected=false;
             }
         } catch (Exception ae) {
             dataArea.setText(ae.getMessage());
