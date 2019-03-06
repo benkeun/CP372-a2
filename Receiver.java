@@ -66,7 +66,7 @@ public class Receiver extends JFrame implements ActionListener {
                         byte[] sequenceNumberByte = Arrays.copyOfRange(buffer, 0, 4);
                         byte[] filePortionByte;
                         int sequenceNumber = java.nio.ByteBuffer.wrap(sequenceNumberByte).getInt();
-                        if (sequenceNumber == (numPackets-1)) {
+                        if (sequenceNumber == (numPackets)) {
                             filePortionByte = Arrays.copyOfRange(buffer, 4, leftOverByte);
                         } else {
                             filePortionByte = Arrays.copyOfRange(buffer, 4, buffer.length);
