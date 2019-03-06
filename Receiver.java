@@ -109,7 +109,7 @@ public class Receiver extends JFrame implements ActionListener {
     }
 
     public Receiver() {
-        this.setLocation(200, 200);
+        this.setLocation(500, 200);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setVisible(true);
         connectPanelInit();
@@ -201,7 +201,8 @@ public class Receiver extends JFrame implements ActionListener {
         ackPortField.setVisible(true);
 
         dataPortField.setBounds(20, 80, 100, 25);
-        dataPortField.setVisible(true);
+        dataPortField.
+        setVisible(true);
 
         IPLabel.setBounds(130, 10, 80, 20);
         IPLabel.setVisible(true);
