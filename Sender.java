@@ -175,7 +175,6 @@ public class Sender extends JFrame implements ActionListener {
                     while (fileTransfering) {
                         fileTransfering = false;
                         try {
-                            System.out.println(i);
                             byte[] send = new byte[4 + mds];
                             byte[] result = new byte[] { (byte) (i >> 24), (byte) (i >> 16), (byte) (i >> 8),
                                     (byte) i };

@@ -185,7 +185,7 @@ public class Receiver extends JFrame implements ActionListener {
     public void connectPanelInit() {
         add(connectPanel);
         connectPanel.setLayout(null);
-        this.setSize(300, 200);
+        this.setSize(280, 180);
         this.setTitle("Connect");
 
         connectPanel.add(connectButton);
@@ -231,6 +231,8 @@ public class Receiver extends JFrame implements ActionListener {
         clientPanel.add(disconnectButton);
         clientPanel.add(reliableBox);
         clientPanel.add(scrollPane);
+        clientPanel.add(fileNameField);
+        clientPanel.add(fileNameLabel);
         clientPanel.setVisible(true);
         
         dataArea.setVisible(true);
@@ -238,8 +240,14 @@ public class Receiver extends JFrame implements ActionListener {
         dataArea.setLineWrap(true);
         dataArea.setText("");
 
+        reliableBox.setBounds(380,80,100,30);
         reliableBox.setVisible(true);
-        reliableBox.setBounds(380,60,100,30);
+
+        fileNameLabel.setBounds(380, 10, 110, 20);
+        fileNameLabel.setVisible(true);
+
+        fileNameField.setBounds(380, 40, 110, 20);
+        fileNameField.setVisible(true);
 
         disconnectButton.setBounds(380, 130, 170, 30);
         disconnectButton.setVisible(true);
