@@ -52,14 +52,21 @@ public class Sender extends JFrame implements ActionListener {
     static boolean fileTransfering = false;
     static boolean connected=false;
 
+
     public Sender() {
         this.setLocation(200, 200);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setVisible(true);
+
         connectPanelInit();
+        connectButton.addActionListener(this);
+        
+        disconnectButton.addActionListener(this);
+        transferButton.addActionListener(this);
     }
 
     public void connectPanelInit() {
+      
         add(connectPanel);
         connectPanel.setLayout(null);
         this.setSize(300, 200);
@@ -95,7 +102,7 @@ public class Sender extends JFrame implements ActionListener {
         dataPortLabel.setBounds(20, 60, 110, 20);
         dataPortLabel.setVisible(true);
 
-        connectButton.addActionListener(this);
+        
     }
 
     public void clientPanelInit() throws Exception {
@@ -147,8 +154,7 @@ public class Sender extends JFrame implements ActionListener {
         disconnectButton.setVisible(true);
         disconnectButton.setBounds(280, 220, 170, 30);
 
-        disconnectButton.addActionListener(this);
-        transferButton.addActionListener(this);
+        
     }
 
     public void outThread() {

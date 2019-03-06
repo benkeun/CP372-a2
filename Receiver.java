@@ -112,7 +112,13 @@ public class Receiver extends JFrame implements ActionListener {
         this.setLocation(500, 200);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setVisible(true);
+        
+        
+        
         connectPanelInit();
+        connectButton.addActionListener(this);
+        disconnectButton.addActionListener(this);
+        reliableBox.addActionListener(this);
     }
 
     public String handshake() {
@@ -179,7 +185,7 @@ public class Receiver extends JFrame implements ActionListener {
     public void connectPanelInit() {
         add(connectPanel);
         connectPanel.setLayout(null);
-        this.setSize(270, 170);
+        this.setSize(300, 200);
         this.setTitle("Connect");
 
         connectPanel.add(connectButton);
@@ -201,19 +207,18 @@ public class Receiver extends JFrame implements ActionListener {
         ackPortField.setVisible(true);
 
         dataPortField.setBounds(20, 80, 100, 25);
-        dataPortField.
-        setVisible(true);
+        dataPortField.setVisible(true);
 
-        IPLabel.setBounds(130, 10, 80, 20);
+        IPLabel.setBounds(130, 10, 110, 20);
         IPLabel.setVisible(true);
 
-        ackPortLabel.setBounds(20, 10, 80, 20);
+        ackPortLabel.setBounds(20, 10, 110, 20);
         ackPortLabel.setVisible(true);
 
-        dataPortLabel.setBounds(20, 60, 80, 20);
+        dataPortLabel.setBounds(20, 60, 110, 20);
         dataPortLabel.setVisible(true);
 
-        connectButton.addActionListener(this);
+        
     }
 
     public void clientPanelInit() throws Exception {
@@ -243,8 +248,7 @@ public class Receiver extends JFrame implements ActionListener {
         scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
         scrollPane.setVisible(true);
 
-        disconnectButton.addActionListener(this);
-        reliableBox.addActionListener(this);
+
     }
 
     public static void main(final String[] args) throws Exception {
