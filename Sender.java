@@ -1,19 +1,12 @@
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileReader;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
-import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
-import java.util.*;
 import javax.swing.*;
 
 public class Sender extends JFrame implements ActionListener {
@@ -47,11 +40,132 @@ public class Sender extends JFrame implements ActionListener {
     static DatagramSocket sock;
     static FileInputStream fileIn;
     static int timeout;
+    static int packLost=0;
     static long totalTime = 0;
     static Thread out;
     static boolean fileTransfering = false;
-    static boolean connected=false;
+    static boolean connected = false;
 
+
+    public void outThread() {
+        out = new Thread() {
+            public void run() {
+                try {
+                    if (connected) {
+                        byte[] handshake = (Integer.toString(mds + 4) + " " + Integer.toString(num_seq) + " "
+                                + Integer.toString((int) (((num_seq) * (mds + 4)) - num_byte)) + " ").getBytes();
+                        DatagramPacket hand = new DatagramPacket(handshake, handshake.length);
+                        sock.send(hand);
+                        byte[] bufr = new byte[4]; // 2^8
+                        DatagramPacket p = new DatagramPacket(bufr, 4);
+                        sock.receive(p);
+                        fileTransfering = true;
+                        int i = 0;
+                        dataArea.setText("File is transferring");
+                        while (fileTransfering) {
+                            fileTransfering = false;
+                            try {
+                                byte[] send = new byte[4 + mds];
+                                byte[] result = new byte[] { (byte) (i >> 24), (byte) (i >> 16), (byte) (i >> 8),
+                                        (byte) i };
+
+                                System.arraycopy(result, 0, send, 0, 4);
+                                System.arraycopy(packages[i], 0, send, 4, packages[i].length);
+
+                                DatagramPacket n = new DatagramPacket(send, send.length);
+                                sock.send(n);
+
+                                byte[] buf = new byte[mds];
+                                DatagramPacket ack = new DatagramPacket(buf, 4);
+                                sock.receive(ack);
+                                int seq = java.nio.ByteBuffer.wrap(buf).getInt();
+                                if (i == seq) {
+                                    acknowledged[seq] = 1;
+                                    i++;
+                                }
+                            } catch (SocketTimeoutException h) {
+                               packLost++;
+                            }
+                            for (int j = 0; j < acknowledged.length; j++) {
+                                if (acknowledged[j] == 0) {
+                                    fileTransfering = true;
+                                }
+                            }
+
+                        }
+                        byte b[] = new byte[4];
+
+                        ByteBuffer buf = ByteBuffer.wrap(b);
+                        buf.putInt(-1);
+                        DatagramPacket done = new DatagramPacket(b, 4);
+                        sock.send(done);
+                        totalTime = System.currentTimeMillis() - totalTime;
+                        dataArea.setText(String.format("There were %d packets resent.\n",packLost) 
+                                        +String.format("It took %d ms to succesfully transfer the file.", totalTime));
+
+                    }
+                } catch (Exception e) {
+                    dataArea.setText(e.getMessage());
+                }
+
+                return;
+            }
+        };
+    }
+
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        try {
+            dataArea.setText("");
+            String action = e.getActionCommand();
+            if (action.equals("CONNECT")) {
+                if (!connected) {
+                    portIn = Integer.parseInt(dataPortField.getText());
+                    endPort = Integer.parseInt(ackPortField.getText());
+                    endIP = InetAddress.getByName(IPField.getText());
+                    connected = true;
+                    sock = new DatagramSocket(portIn);
+                    sock.connect(endIP, endPort);
+                    connectPanel.setVisible(false);
+                    clientPanelInit();
+                }
+
+            } else if (action.equals("TRANSFER")) {
+                if (Integer.parseInt(mdsField.getText()) < 4) {
+                    dataArea.setText("MDS must be at least 4 bytes.");
+                } else if (Integer.parseInt(timeoutField.getText()) < 10) {
+                    dataArea.setText("Timeout must be at least 10ms.");
+                } else if (!fileTransfering) {
+                    packLost=0;
+                    totalTime = System.currentTimeMillis();
+                    file_name = new File(fileNameField.getText());
+                    fileIn = new FileInputStream(file_name);
+
+                    num_byte = file_name.length();
+                    mds = Integer.parseInt(mdsField.getText());
+                    num_seq = (int) Math.ceil(num_byte / mds);
+                    timeout = Integer.parseInt(timeoutField.getText());
+                    sock.setSoTimeout(timeout);
+
+                    packages = new byte[num_seq][mds];
+                    acknowledged = new int[num_seq];
+                    for (int i = 0; i < num_seq; i++) {
+                        acknowledged[i] = 0;
+                        fileIn.read(packages[i]);
+                    }
+                    outThread();
+                    out.start();
+                }
+            } else if (action.equals("DISCONNECT")) {
+                sock.close();
+                clientPanel.setVisible(false);
+                connectPanelInit();
+                connected = false;
+            }
+        } catch (Exception ae) {
+            dataArea.setText("ERROR: " + ae.getMessage());
+        }
+    }
 
     public Sender() {
         this.setLocation(200, 200);
@@ -60,16 +174,16 @@ public class Sender extends JFrame implements ActionListener {
 
         connectPanelInit();
         connectButton.addActionListener(this);
-        
+
         disconnectButton.addActionListener(this);
         transferButton.addActionListener(this);
     }
 
     public void connectPanelInit() {
-      
+
         add(connectPanel);
         connectPanel.setLayout(null);
-        this.setSize(300, 200);
+        this.setSize(280, 180);
         this.setTitle("Connect");
 
         connectPanel.add(connectButton);
@@ -102,7 +216,6 @@ public class Sender extends JFrame implements ActionListener {
         dataPortLabel.setBounds(20, 60, 110, 20);
         dataPortLabel.setVisible(true);
 
-        
     }
 
     public void clientPanelInit() throws Exception {
@@ -154,124 +267,10 @@ public class Sender extends JFrame implements ActionListener {
         disconnectButton.setVisible(true);
         disconnectButton.setBounds(280, 220, 170, 30);
 
-        
-    }
-
-    public void outThread() {
-        out = new Thread() {
-            public void run() {
-                try {
-                    if (connected){
-                    byte[] handshake = (Integer.toString(mds + 4) + " " + Integer.toString(num_seq) + " "
-                            + Integer.toString((int) (((num_seq) * (mds + 4)) - num_byte)) + " ").getBytes();
-                    DatagramPacket hand = new DatagramPacket(handshake, handshake.length);
-                    sock.send(hand);
-                    System.out.println(new String(handshake));
-                    byte[] bufr = new byte[4]; // 2^8
-                    DatagramPacket p = new DatagramPacket(bufr, 4);
-                    sock.receive(p);
-                    fileTransfering = true;
-                    int i = 0;
-                    while (fileTransfering) {
-                        fileTransfering = false;
-                        try {
-                            byte[] send = new byte[4 + mds];
-                            byte[] result = new byte[] { (byte) (i >> 24), (byte) (i >> 16), (byte) (i >> 8),
-                                    (byte) i };
-
-                            System.arraycopy(result, 0, send, 0, 4);
-                            System.arraycopy(packages[i], 0, send, 4, packages[i].length);
-
-                            DatagramPacket n = new DatagramPacket(send, send.length);
-                            sock.send(n);
-
-                            byte[] buf = new byte[mds];
-                            DatagramPacket ack = new DatagramPacket(buf, 4);
-                            sock.receive(ack);
-                            int seq = java.nio.ByteBuffer.wrap(buf).getInt();
-                            if (i == seq) {
-                                acknowledged[seq] = 1;
-                                i++;
-                            }
-                        } catch (SocketTimeoutException h) {
-                            System.out.println(h);
-                        }
-                        for (int j = 0; j < acknowledged.length; j++) {
-                            if (acknowledged[j] == 0) {
-                                fileTransfering = true;
-                            }
-                        }
-
-                    }
-                    byte b[] = new byte[4];
-
-                    ByteBuffer buf = ByteBuffer.wrap(b);
-                    buf.putInt(-1);
-                    DatagramPacket done = new DatagramPacket(b, 4);
-                    sock.send(done);
-                    totalTime = System.currentTimeMillis() - totalTime;
-                    dataArea.setText(String.format("It took %d ms to transfer the file.", totalTime));
-
-                }
-                } catch (Exception e) {
-                    dataArea.setText(e.getMessage());
-                }
-                
-                return;
-            }
-        };
     }
 
     public static void main(String[] args) {
         new Sender();
 
-    }
-
-    @Override
-    public void actionPerformed(ActionEvent e) {
-        try {
-            String action = e.getActionCommand();
-            if (action.equals("CONNECT")) {
-                if (!connected){
-                portIn = Integer.parseInt(dataPortField.getText());
-                endPort = Integer.parseInt(ackPortField.getText());
-                endIP = InetAddress.getByName(IPField.getText());
-                connected=true;
-                sock = new DatagramSocket(portIn);
-                sock.connect(endIP, endPort);
-                connectPanel.setVisible(false);
-                clientPanelInit();
-                }
-
-            } else if (action.equals("TRANSFER")) {
-                if (!fileTransfering){
-                totalTime = System.currentTimeMillis();
-                file_name = new File(fileNameField.getText());
-                fileIn = new FileInputStream(file_name);
-
-                num_byte = file_name.length();
-                mds = Integer.parseInt(mdsField.getText());
-                num_seq = (int) Math.ceil(num_byte / mds);
-                timeout = Integer.parseInt(timeoutField.getText());
-                sock.setSoTimeout(timeout);
-
-                packages = new byte[num_seq][mds];
-                acknowledged = new int[num_seq];
-                for (int i = 0; i < num_seq; i++) {
-                    acknowledged[i] = 0;
-                    fileIn.read(packages[i]);
-                }
-                outThread();
-                out.start();
-            }
-            } else if (action.equals("DISCONNECT")) {
-                sock.close();
-                clientPanel.setVisible(false);
-                connectPanelInit();
-                connected=false;
-            }
-        } catch (Exception ae) {
-            dataArea.setText(ae.getMessage());
-        }
     }
 }
