@@ -5,6 +5,8 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import javax.swing.*;
+import javax.swing.text.DefaultCaret;
+
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
@@ -29,7 +31,6 @@ public class Receiver extends JFrame implements ActionListener {
     static int leftOverByte;
     static boolean receivingStop = false;
     static JScrollPane scrollPane = new JScrollPane(dataArea);
-
     static DatagramSocket socket = null;
     static InetAddress address;
 
@@ -57,11 +58,12 @@ public class Receiver extends JFrame implements ActionListener {
                         while (transmitting) {
                             counter++;
                             socket.receive(packet);
+
                             byte[] sequenceNumberByte = Arrays.copyOfRange(buffer, 0, 4);
                             byte[] filePortionByte;
                             int sequenceNumber = java.nio.ByteBuffer.wrap(sequenceNumberByte).getInt();
-                            if (sequenceNumber == (numPackets)) {
-                                filePortionByte = Arrays.copyOfRange(buffer, 4, leftOverByte);
+                            if (sequenceNumber == (numPackets-1)) {
+                                filePortionByte = Arrays.copyOfRange(buffer, 4, packet.getLength());
                             } else {
                                 filePortionByte = Arrays.copyOfRange(buffer, 4, buffer.length);
                             }
@@ -76,6 +78,7 @@ public class Receiver extends JFrame implements ActionListener {
                             } else if (counter % 10 != 0 || reliable) {
                                 dataArea.setText(dataArea.getText() + "There were " + (sequenceNumber + 1) + " of "
                                         + numPackets + " packets Received in order\n");
+                                        dataArea.setCaretPosition(dataArea.getDocument().getLength());
                                 file[sequenceNumber] = filePortionByte;
                                 acknowledged[sequenceNumber] = true;
 

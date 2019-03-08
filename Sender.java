@@ -30,6 +30,7 @@ public class Sender extends JFrame implements ActionListener {
     static JTextArea dataArea = new JTextArea("");
     static File file_name;
     static double num_byte;
+    static int lastPack=0;
     static int mds;
     static int num_seq;
     static byte[][] packages;
@@ -65,14 +66,25 @@ public class Sender extends JFrame implements ActionListener {
                         while (fileTransfering) {
                             fileTransfering = false;
                             try {
+                                DatagramPacket n;
+                                if(i!=num_seq-1){
                                 byte[] send = new byte[4 + mds];
                                 byte[] result = new byte[] { (byte) (i >> 24), (byte) (i >> 16), (byte) (i >> 8),
                                         (byte) i };
-
+                                        
                                 System.arraycopy(result, 0, send, 0, 4);
                                 System.arraycopy(packages[i], 0, send, 4, packages[i].length);
-
-                                DatagramPacket n = new DatagramPacket(send, send.length);
+                                n = new DatagramPacket(send, send.length);
+                                }
+                                else{
+                                    byte[] send = new byte[4 + lastPack];
+                                    byte[] result = new byte[] { (byte) (i >> 24), (byte) (i >> 16), (byte) (i >> 8),
+                                            (byte) i };
+                                            
+                                    System.arraycopy(result, 0, send, 0, 4);
+                                    System.arraycopy(packages[i], 0, send, 4,lastPack);
+                                    n = new DatagramPacket(send, send.length);
+                                }
                                 sock.send(n);
 
                                 byte[] buf = new byte[mds];
@@ -101,7 +113,8 @@ public class Sender extends JFrame implements ActionListener {
                         sock.send(done);
                         totalTime = System.currentTimeMillis() - totalTime;
                         dataArea.setText(String.format("There were %d packets resent.\n",packLost) 
-                                        +String.format("It took %d ms to succesfully transfer the file.", totalTime));
+                                        +String.format("It took %d ms to succesfully transfer the file.\n", totalTime)
+                                        +String.format("The file was %.2f bytes or %.2fKB",num_byte,num_byte/1024));
 
                     }
                 } catch (Exception e) {
@@ -133,8 +146,8 @@ public class Sender extends JFrame implements ActionListener {
             } else if (action.equals("TRANSFER")) {
                 if (Integer.parseInt(mdsField.getText()) < 4) {
                     dataArea.setText("MDS must be at least 4 bytes.");
-                } else if (Integer.parseInt(timeoutField.getText()) < 10) {
-                    dataArea.setText("Timeout must be at least 10ms.");
+                } else if (Integer.parseInt(timeoutField.getText()) < 25) {
+                    dataArea.setText("Timeout must be at least 25ms.");
                 } else if (!fileTransfering) {
                     packLost=0;
                     totalTime = System.currentTimeMillis();
@@ -151,7 +164,7 @@ public class Sender extends JFrame implements ActionListener {
                     acknowledged = new int[num_seq];
                     for (int i = 0; i < num_seq; i++) {
                         acknowledged[i] = 0;
-                        fileIn.read(packages[i]);
+                        lastPack=fileIn.read(packages[i]);
                     }
                     outThread();
                     out.start();
