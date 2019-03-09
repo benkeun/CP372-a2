@@ -28,7 +28,6 @@ public class Receiver extends JFrame implements ActionListener {
     static boolean reliable = false;
     static int packetSize;
     static int numPackets;
-    static int leftOverByte;
     static boolean receivingStop = false;
     static JScrollPane scrollPane = new JScrollPane(dataArea);
     static DatagramSocket socket = null;
@@ -47,21 +46,28 @@ public class Receiver extends JFrame implements ActionListener {
                         int counter = 1;
                         transmitting = true;
                         String packetInfo[] = handshake().split(" ");
+                        
                         packetSize = Integer.parseInt(packetInfo[0]);
                         numPackets = Integer.parseInt(packetInfo[1]);
-                        leftOverByte = Integer.parseInt(packetInfo[2]);
+                        
                         byte[][] file = new byte[numPackets][packetSize];
                         acknowledged = new boolean[numPackets];
                         dataArea.setText("");
                         byte[] buffer = new byte[packetSize];
                         DatagramPacket packet = new DatagramPacket(buffer, packetSize);
                         while (transmitting) {
+                            
                             counter++;
                             socket.receive(packet);
 
                             byte[] sequenceNumberByte = Arrays.copyOfRange(buffer, 0, 4);
                             byte[] filePortionByte;
                             int sequenceNumber = java.nio.ByteBuffer.wrap(sequenceNumberByte).getInt();
+                            if(sequenceNumber>numPackets || sequenceNumber==-5){
+    
+                                throw new Exception("Error: File no longer Transfering");
+                                
+                            }
                             if (sequenceNumber == (numPackets-1)) {
                                 filePortionByte = Arrays.copyOfRange(buffer, 4, packet.getLength());
                             } else {
@@ -82,8 +88,7 @@ public class Receiver extends JFrame implements ActionListener {
                                 file[sequenceNumber] = filePortionByte;
                                 acknowledged[sequenceNumber] = true;
 
-                                if (sequenceNumber == numPackets) {
-                                }
+                    
                                 DatagramPacket pSend = new DatagramPacket(sequenceNumberByte, 4);
                                 socket.send(pSend);
 
@@ -91,7 +96,8 @@ public class Receiver extends JFrame implements ActionListener {
                         }
                     }
                 } catch (Exception e) {
-                    System.out.println(e);
+                    dataArea.setText(e.getLocalizedMessage());
+                    transmitting=false;
                 }
                 if (receivingStop) {
                     return;
@@ -124,13 +130,13 @@ public class Receiver extends JFrame implements ActionListener {
             DatagramPacket p = new DatagramPacket(buf, 64);
             socket.receive(p);
             String handshake = new String(buf);
-
+            
             buf = new byte[4];
             ByteBuffer buffer = ByteBuffer.wrap(buf);
             buffer.putInt(-1);
             DatagramPacket done = new DatagramPacket(buf, 4);
             socket.send(done);
-
+           
             return handshake;
 
         } catch (Exception e) {

@@ -15,6 +15,7 @@ public class Sender extends JFrame implements ActionListener {
     static JButton connectButton = new JButton("CONNECT");
     static JButton disconnectButton = new JButton("DISCONNECT");
     static JButton transferButton = new JButton("TRANSFER");
+    static JButton cancelButton = new JButton("CANCEL");
     static JLabel IPLabel = new JLabel("IP Address");
     static JLabel ackPortLabel = new JLabel("ACK Port Number");
     static JLabel dataPortLabel = new JLabel("Data Port Number");
@@ -30,7 +31,7 @@ public class Sender extends JFrame implements ActionListener {
     static JTextArea dataArea = new JTextArea("");
     static File file_name;
     static double num_byte;
-    static int lastPack=0;
+    static int lastPack = 0;
     static int mds;
     static int num_seq;
     static byte[][] packages;
@@ -41,20 +42,21 @@ public class Sender extends JFrame implements ActionListener {
     static DatagramSocket sock;
     static FileInputStream fileIn;
     static int timeout;
-    static int packLost=0;
+    static int packLost = 0;
     static long totalTime = 0;
     static Thread out;
     static boolean fileTransfering = false;
     static boolean connected = false;
-
+    static boolean cancel= false;
 
     public void outThread() {
         out = new Thread() {
             public void run() {
                 try {
                     if (connected) {
-                        byte[] handshake = (Integer.toString(mds + 4) + " " + Integer.toString(num_seq) + " "
-                                + Integer.toString((int) (((num_seq) * (mds + 4)) - num_byte)) + " ").getBytes();
+                        
+                        byte[] handshake = (Integer.toString(mds + 4) + " " + Integer.toString(num_seq) + " ")
+                                .getBytes();
                         DatagramPacket hand = new DatagramPacket(handshake, handshake.length);
                         sock.send(hand);
                         byte[] bufr = new byte[4]; // 2^8
@@ -63,26 +65,25 @@ public class Sender extends JFrame implements ActionListener {
                         fileTransfering = true;
                         int i = 0;
                         dataArea.setText("File is transferring");
-                        while (fileTransfering) {
+                        while (fileTransfering&&!cancel) {
                             fileTransfering = false;
                             try {
                                 DatagramPacket n;
-                                if(i!=num_seq-1){
-                                byte[] send = new byte[4 + mds];
-                                byte[] result = new byte[] { (byte) (i >> 24), (byte) (i >> 16), (byte) (i >> 8),
-                                        (byte) i };
-                                        
-                                System.arraycopy(result, 0, send, 0, 4);
-                                System.arraycopy(packages[i], 0, send, 4, packages[i].length);
-                                n = new DatagramPacket(send, send.length);
-                                }
-                                else{
+                                if (i != num_seq - 1) {
+                                    byte[] send = new byte[4 + mds];
+                                    byte[] result = new byte[] { (byte) (i >> 24), (byte) (i >> 16), (byte) (i >> 8),
+                                            (byte) i };
+
+                                    System.arraycopy(result, 0, send, 0, 4);
+                                    System.arraycopy(packages[i], 0, send, 4, packages[i].length);
+                                    n = new DatagramPacket(send, send.length);
+                                } else {
                                     byte[] send = new byte[4 + lastPack];
                                     byte[] result = new byte[] { (byte) (i >> 24), (byte) (i >> 16), (byte) (i >> 8),
                                             (byte) i };
-                                            
+
                                     System.arraycopy(result, 0, send, 0, 4);
-                                    System.arraycopy(packages[i], 0, send, 4,lastPack);
+                                    System.arraycopy(packages[i], 0, send, 4, lastPack);
                                     n = new DatagramPacket(send, send.length);
                                 }
                                 sock.send(n);
@@ -96,15 +97,16 @@ public class Sender extends JFrame implements ActionListener {
                                     i++;
                                 }
                             } catch (SocketTimeoutException h) {
-                               packLost++;
+                                packLost++;
                             }
                             for (int j = 0; j < acknowledged.length; j++) {
-                                if (acknowledged[j] == 0) {
+                                if (acknowledged[j] == 0 &&!cancel) {
                                     fileTransfering = true;
                                 }
                             }
 
                         }
+                        if(!cancel){
                         byte b[] = new byte[4];
 
                         ByteBuffer buf = ByteBuffer.wrap(b);
@@ -112,13 +114,17 @@ public class Sender extends JFrame implements ActionListener {
                         DatagramPacket done = new DatagramPacket(b, 4);
                         sock.send(done);
                         totalTime = System.currentTimeMillis() - totalTime;
-                        dataArea.setText(String.format("There were %d packets resent.\n",packLost) 
-                                        +String.format("It took %d ms to succesfully transfer the file.\n", totalTime)
-                                        +String.format("The file was %.2f bytes or %.2fKB",num_byte,num_byte/1024));
-
+                        dataArea.setText(String.format("There were %d packets resent.\n", packLost)
+                                + String.format("It took %d ms to succesfully transfer the file.\n", totalTime)
+                                + String.format("The file was %.2f bytes or %.2fKB", num_byte, num_byte / 1024));
+                        transferButton.setEnabled(true);
+                        cancelButton.setEnabled(false);
                     }
+                }
                 } catch (Exception e) {
                     dataArea.setText(e.getMessage());
+                    transferButton.setEnabled(true);
+                    cancelButton.setEnabled(false);
                 }
 
                 return;
@@ -141,15 +147,19 @@ public class Sender extends JFrame implements ActionListener {
                     sock.connect(endIP, endPort);
                     connectPanel.setVisible(false);
                     clientPanelInit();
+                    dataArea.setText("For best Results:\nSet MDS to at least .05% of your file size");
                 }
 
             } else if (action.equals("TRANSFER")) {
                 if (Integer.parseInt(mdsField.getText()) < 4) {
                     dataArea.setText("MDS must be at least 4 bytes.");
+                } else if (Integer.parseInt(mdsField.getText()) > 65500) {
+                    dataArea.setText("MDS cannot be more than 65500 bytes.");
                 } else if (Integer.parseInt(timeoutField.getText()) < 25) {
                     dataArea.setText("Timeout must be at least 25ms.");
                 } else if (!fileTransfering) {
-                    packLost=0;
+                    
+                    packLost = 0;
                     totalTime = System.currentTimeMillis();
                     file_name = new File(fileNameField.getText());
                     fileIn = new FileInputStream(file_name);
@@ -159,13 +169,16 @@ public class Sender extends JFrame implements ActionListener {
                     num_seq = (int) Math.ceil(num_byte / mds);
                     timeout = Integer.parseInt(timeoutField.getText());
                     sock.setSoTimeout(timeout);
-
+                    
                     packages = new byte[num_seq][mds];
                     acknowledged = new int[num_seq];
                     for (int i = 0; i < num_seq; i++) {
                         acknowledged[i] = 0;
-                        lastPack=fileIn.read(packages[i]);
+                        lastPack = fileIn.read(packages[i]);
                     }
+                    transferButton.setEnabled(false);
+                    cancelButton.setEnabled(true);
+                    cancel=false;
                     outThread();
                     out.start();
                 }
@@ -174,9 +187,24 @@ public class Sender extends JFrame implements ActionListener {
                 clientPanel.setVisible(false);
                 connectPanelInit();
                 connected = false;
+                transferButton.setEnabled(true);
+            } else if (action.equals("CANCEL")){
+                dataArea.setText("Transfer Canceled");
+                byte b[] = new byte[4];
+
+                ByteBuffer buf = ByteBuffer.wrap(b);
+                buf.putInt(-5);
+                DatagramPacket done = new DatagramPacket(b, 4);
+                sock.send(done);
+                fileTransfering = false;
+                cancel=true;
+                transferButton.setEnabled(true);
+                cancelButton.setEnabled(false);
             }
         } catch (Exception ae) {
-            dataArea.setText("ERROR: " + ae.getMessage());
+            dataArea.setText(ae.getMessage());
+            transferButton.setEnabled(true);
+            cancelButton.setEnabled(false);
         }
     }
 
@@ -190,6 +218,7 @@ public class Sender extends JFrame implements ActionListener {
 
         disconnectButton.addActionListener(this);
         transferButton.addActionListener(this);
+        cancelButton.addActionListener(this);
     }
 
     public void connectPanelInit() {
@@ -241,6 +270,7 @@ public class Sender extends JFrame implements ActionListener {
         clientPanel.setLayout(null);
         clientPanel.add(disconnectButton);
         clientPanel.add(transferButton);
+        clientPanel.add(cancelButton);
         clientPanel.add(dataArea);
         clientPanel.add(fileNameField);
         clientPanel.add(mdsField);
@@ -257,7 +287,7 @@ public class Sender extends JFrame implements ActionListener {
         dataArea.setLineWrap(true);
 
         transferButton.setVisible(true);
-        transferButton.setBounds(280, 180, 170, 30);
+        transferButton.setBounds(280, 140, 170, 30);
 
         fileNameLabel.setVisible(true);
         fileNameLabel.setBounds(10, 10, 110, 20);
@@ -278,7 +308,11 @@ public class Sender extends JFrame implements ActionListener {
         timeoutField.setBounds(280, 80, 110, 20);
 
         disconnectButton.setVisible(true);
-        disconnectButton.setBounds(280, 220, 170, 30);
+        disconnectButton.setBounds(280, 180, 170, 30);
+
+        cancelButton.setVisible(true);
+        cancelButton.setEnabled(false);
+        cancelButton.setBounds(280,220, 170, 30);
 
     }
 
