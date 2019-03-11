@@ -7,6 +7,9 @@ import java.util.Arrays;
 import javax.swing.*;
 import javax.swing.text.DefaultCaret;
 
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Graphics;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
@@ -25,6 +28,7 @@ public class Receiver extends JFrame implements ActionListener {
     static JTextField fileNameField = new JTextField("file.txt");
     static JTextArea dataArea = new JTextArea("");
     static JCheckBox reliableBox = new JCheckBox("RELIABLE");
+    static RectDraw progressRect = new RectDraw();
     static boolean reliable = false;
     static int packetSize;
     static int numPackets;
@@ -46,29 +50,34 @@ public class Receiver extends JFrame implements ActionListener {
                         int counter = 1;
                         transmitting = true;
                         String packetInfo[] = handshake().split(" ");
-                        
+
                         packetSize = Integer.parseInt(packetInfo[0]);
                         numPackets = Integer.parseInt(packetInfo[1]);
-                        
+
                         byte[][] file = new byte[numPackets][packetSize];
                         acknowledged = new boolean[numPackets];
                         dataArea.setText("");
                         byte[] buffer = new byte[packetSize];
                         DatagramPacket packet = new DatagramPacket(buffer, packetSize);
                         while (transmitting) {
-                            
+
                             counter++;
                             socket.receive(packet);
 
                             byte[] sequenceNumberByte = Arrays.copyOfRange(buffer, 0, 4);
                             byte[] filePortionByte;
                             int sequenceNumber = java.nio.ByteBuffer.wrap(sequenceNumberByte).getInt();
-                            if(sequenceNumber>numPackets || sequenceNumber==-5){
-    
-                                throw new Exception("Error: File no longer Transfering");
-                                
+                            if(sequenceNumber!=-1){
+                            int x =((350*(sequenceNumber+1))/numPackets);
+
+                            progressRect.setBounds(10, 165, x, 20);
                             }
-                            if (sequenceNumber == (numPackets-1)) {
+                            if (sequenceNumber > numPackets || sequenceNumber == -5) {
+
+                                throw new Exception("Error: File no longer Transfering");
+
+                            }
+                            if (sequenceNumber == (numPackets - 1)) {
                                 filePortionByte = Arrays.copyOfRange(buffer, 4, packet.getLength());
                             } else {
                                 filePortionByte = Arrays.copyOfRange(buffer, 4, buffer.length);
@@ -84,20 +93,21 @@ public class Receiver extends JFrame implements ActionListener {
                             } else if (counter % 10 != 0 || reliable) {
                                 dataArea.setText(dataArea.getText() + "There were " + (sequenceNumber + 1) + " of "
                                         + numPackets + " packets Received in order\n");
-                                        dataArea.setCaretPosition(dataArea.getDocument().getLength());
+
+                                dataArea.setCaretPosition(dataArea.getDocument().getLength());
                                 file[sequenceNumber] = filePortionByte;
                                 acknowledged[sequenceNumber] = true;
 
-                    
                                 DatagramPacket pSend = new DatagramPacket(sequenceNumberByte, 4);
                                 socket.send(pSend);
 
                             }
+                            
                         }
                     }
                 } catch (Exception e) {
                     dataArea.setText(e.getLocalizedMessage());
-                    transmitting=false;
+                    transmitting = false;
                 }
                 if (receivingStop) {
                     return;
@@ -130,13 +140,13 @@ public class Receiver extends JFrame implements ActionListener {
             DatagramPacket p = new DatagramPacket(buf, 64);
             socket.receive(p);
             String handshake = new String(buf);
-            
+
             buf = new byte[4];
             ByteBuffer buffer = ByteBuffer.wrap(buf);
             buffer.putInt(-1);
             DatagramPacket done = new DatagramPacket(buf, 4);
             socket.send(done);
-           
+
             return handshake;
 
         } catch (Exception e) {
@@ -223,7 +233,7 @@ public class Receiver extends JFrame implements ActionListener {
     public void clientPanelInit() throws Exception {
         add(clientPanel);
         clientPanel.setLayout(null);
-        this.setSize(575, 220);
+        this.setSize(575, 230);
         this.setTitle("Client");
 
         clientPanel.setLayout(null);
@@ -232,6 +242,7 @@ public class Receiver extends JFrame implements ActionListener {
         clientPanel.add(scrollPane);
         clientPanel.add(fileNameField);
         clientPanel.add(fileNameLabel);
+        clientPanel.add(progressRect);
         clientPanel.setVisible(true);
 
         dataArea.setVisible(true);
@@ -255,9 +266,21 @@ public class Receiver extends JFrame implements ActionListener {
         scrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
         scrollPane.setVisible(true);
 
+        progressRect.setBounds(10, 165, 0, 20);
+        progressRect.setVisible(true);
+
     }
 
     public static void main(final String[] args) throws Exception {
         Receiver mainView = new Receiver();
+    }
+
+    private static class RectDraw extends JPanel {
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            g.drawRect(0, 0, 350, 20);
+            g.setColor(new Color(0,200,10));
+            g.fillRect(0, 0, 350, 20);
+        }
     }
 }

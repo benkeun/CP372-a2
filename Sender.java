@@ -205,6 +205,7 @@ public class Sender extends JFrame implements ActionListener {
             dataArea.setText(ae.getMessage());
             transferButton.setEnabled(true);
             cancelButton.setEnabled(false);
+            System.out.println(ae.getMessage());
         }
     }
 
